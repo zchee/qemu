@@ -58,13 +58,11 @@ static void egl_scanout_disable(void *dg)
     egl_fb_destroy(&edpy->blit_fb);
 }
 
-static void egl_scanout_texture(void *dg,
-                                uint32_t backing_id,
-                                bool backing_y_0_top,
-                                uint32_t backing_width,
-                                uint32_t backing_height,
-                                uint32_t x, uint32_t y,
-                                uint32_t w, uint32_t h)
+static void egl_scanout_imported_texture(void *dg,
+                                         uint32_t backing_texture,
+                                         bool backing_y_0_top,
+                                         uint32_t backing_width,
+                                         uint32_t backing_height)
 {
     egl_dpy *edpy = dg;
 
@@ -72,13 +70,31 @@ static void egl_scanout_texture(void *dg,
 
     /* source framebuffer */
     egl_fb_setup_for_tex(&edpy->guest_fb,
-                         backing_width, backing_height, backing_id, false);
+                         backing_width, backing_height, backing_texture, false);
 
     /* dest framebuffer */
     if (edpy->blit_fb.width  != backing_width ||
         edpy->blit_fb.height != backing_height) {
         egl_fb_destroy(&edpy->blit_fb);
         egl_fb_setup_new_tex(&edpy->blit_fb, backing_width, backing_height);
+    }
+}
+
+static void egl_scanout_texture(void *dg,
+                                uint32_t backing_id,
+                                DisplayGLTextureBorrower backing_borrower,
+                                uint32_t x, uint32_t y,
+                                uint32_t w, uint32_t h)
+{
+    bool backing_y_0_top;
+    uint32_t backing_width;
+    uint32_t backing_height;
+
+    GLuint backing_texture = backing_borrower(backing_id, &backing_y_0_top,
+                                              &backing_width, &backing_height);
+    if (backing_texture) {
+        egl_scanout_imported_texture(dg, backing_texture, backing_y_0_top,
+                                     backing_width, backing_height);
     }
 }
 
@@ -89,9 +105,8 @@ static void egl_scanout_dmabuf(void *dg, QemuDmaBuf *dmabuf)
         return;
     }
 
-    egl_scanout_texture(dg, dmabuf->texture,
-                        false, dmabuf->width, dmabuf->height,
-                        0, 0, dmabuf->width, dmabuf->height);
+    egl_scanout_imported_texture(dg, dmabuf->texture,
+                                 false, dmabuf->width, dmabuf->height);
 }
 
 static void egl_cursor_dmabuf(void *dg,

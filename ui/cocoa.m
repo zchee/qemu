@@ -107,7 +107,7 @@ static QemuEvent cbevent;
 
 typedef struct {
     uint32_t scanout_id;
-    bool scanout_y0_top;
+    DisplayGLTextureBorrower scanout_borrow;
     bool surface_dirty;
 } DisplayGL;
 
@@ -2316,22 +2316,26 @@ static void cocoa_gl_scanout_disable(void *dg)
 
 static void cocoa_gl_scanout_texture(void *dg,
                                      uint32_t backing_id,
-                                     bool backing_y_0_top,
-                                     uint32_t backing_width,
-                                     uint32_t backing_height,
+                                     DisplayGLTextureBorrower backing_borrow,
                                      uint32_t x, uint32_t y,
                                      uint32_t w, uint32_t h)
 {
     ((DisplayGL *)dg)->scanout_id = backing_id;
-    ((DisplayGL *)dg)->scanout_y0_top = backing_y_0_top;
+    ((DisplayGL *)dg)->scanout_borrow = backing_borrow;
 }
 
 static void cocoa_gl_scanout_flush(DisplayChangeListener *dcl,
                                    uint32_t x, uint32_t y, uint32_t w, uint32_t h)
 {
     DisplayGL *dg = dgs + qemu_console_get_index(dcl->con);
+    bool y0_top;
 
     if (!dg->scanout_id) {
+        return;
+    }
+
+    GLint texture = dg->scanout_borrow(dg->scanout_id, &y0_top, NULL, NULL);
+    if (!texture) {
         return;
     }
 
@@ -2340,8 +2344,8 @@ static void cocoa_gl_scanout_flush(DisplayChangeListener *dcl,
 
         glBindFramebuffer(GL_FRAMEBUFFER_EXT, 0);
         glViewport(0, 0, size.width, size.height);
-        glBindTexture(GL_TEXTURE_2D, dg->scanout_id);
-        qemu_gl_run_texture_blit(gls, dg->scanout_y0_top);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        qemu_gl_run_texture_blit(gls, y0_top);
 
         cocoa_gl_render_cursor();
 

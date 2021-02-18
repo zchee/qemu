@@ -170,9 +170,7 @@ bool gd_egl_scanout_get_enabled(void *dg);
 void gd_egl_scanout_disable(void *dg);
 void gd_egl_scanout_texture(void *dg,
                             uint32_t backing_id,
-                            bool backing_y_0_top,
-                            uint32_t backing_width,
-                            uint32_t backing_height,
+                            DisplayGLTextureBorrower backing_borrow,
                             uint32_t x, uint32_t y,
                             uint32_t w, uint32_t h);
 void gd_egl_scanout_dmabuf(void *dg, QemuDmaBuf *dmabuf);
@@ -200,9 +198,7 @@ bool gd_gl_area_scanout_get_enabled(void *dg);
 void gd_gl_area_scanout_dmabuf(void *dg, QemuDmaBuf *dmabuf);
 void gd_gl_area_scanout_texture(void *dg,
                                 uint32_t backing_id,
-                                bool backing_y_0_top,
-                                uint32_t backing_width,
-                                uint32_t backing_height,
+                                DisplayGLTextureBorrower backing_borrow,
                                 uint32_t x, uint32_t y,
                                 uint32_t w, uint32_t h);
 void gd_gl_area_scanout_disable(void *dg);

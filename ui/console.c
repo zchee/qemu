@@ -1878,16 +1878,12 @@ void dpy_gl_scanout_disable(QemuConsole *con)
 
 void dpy_gl_scanout_texture(QemuConsole *con,
                             uint32_t backing_id,
-                            bool backing_y_0_top,
-                            uint32_t backing_width,
-                            uint32_t backing_height,
+                            DisplayGLTextureBorrower backing_borrow,
                             uint32_t x, uint32_t y,
                             uint32_t width, uint32_t height)
 {
     assert(display_gl_ops);
-    display_gl_ops->dpy_gl_scanout_texture(con->dg, backing_id,
-                                           backing_y_0_top,
-                                           backing_width, backing_height,
+    display_gl_ops->dpy_gl_scanout_texture(con->dg, backing_id, backing_borrow,
                                            x, y, width, height);
 }
 

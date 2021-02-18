@@ -221,6 +221,9 @@ struct DisplayChangeListener {
     QLIST_ENTRY(DisplayChangeListener) next;
 };
 
+typedef uint32_t (* DisplayGLTextureBorrower)(uint32_t id, bool *y_0_top,
+                                              uint32_t *width, uint32_t *height);
+
 typedef struct DisplayGLOps {
     QEMUGLContext (*dpy_gl_ctx_create)(void *dg, QEMUGLParams *params);
     void (*dpy_gl_ctx_destroy)(void *dg, QEMUGLContext ctx);
@@ -230,9 +233,7 @@ typedef struct DisplayGLOps {
     void (*dpy_gl_scanout_disable)(void *dg);
     void (*dpy_gl_scanout_texture)(void *dg,
                                    uint32_t backing_id,
-                                   bool backing_y_0_top,
-                                   uint32_t backing_width,
-                                   uint32_t backing_height,
+                                   DisplayGLTextureBorrower backing_borrow,
                                    uint32_t x, uint32_t y,
                                    uint32_t w, uint32_t h);
 
@@ -296,9 +297,8 @@ bool dpy_gfx_check_format(QemuConsole *con,
                           pixman_format_code_t format);
 
 void dpy_gl_scanout_disable(QemuConsole *con);
-void dpy_gl_scanout_texture(QemuConsole *con,
-                            uint32_t backing_id, bool backing_y_0_top,
-                            uint32_t backing_width, uint32_t backing_height,
+void dpy_gl_scanout_texture(QemuConsole *con, uint32_t backing_id,
+                            DisplayGLTextureBorrower backing_borrow,
                             uint32_t x, uint32_t y, uint32_t w, uint32_t h);
 void dpy_gl_scanout_dmabuf(QemuConsole *con,
                            QemuDmaBuf *dmabuf);

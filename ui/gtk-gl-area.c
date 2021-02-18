@@ -177,16 +177,14 @@ bool gd_gl_area_scanout_get_enabled(void *dg)
     return ((VirtualConsole *)dg)->gfx.scanout_mode;
 }
 
-void gd_gl_area_scanout_texture(void *dg,
-                                uint32_t backing_id,
-                                bool backing_y_0_top,
-                                uint32_t backing_width,
-                                uint32_t backing_height,
-                                uint32_t x, uint32_t y,
-                                uint32_t w, uint32_t h)
+static void gd_gl_area_scanout_borrowed_texture(VirtualConsole *vc,
+                                                uint32_t backing_id,
+                                                bool backing_y_0_top,
+                                                uint32_t backing_width,
+                                                uint32_t backing_height,
+                                                uint32_t x, uint32_t y,
+                                                uint32_t w, uint32_t h)
 {
-    VirtualConsole *vc = dg;
-
     vc->gfx.x = x;
     vc->gfx.y = y;
     vc->gfx.w = w;
@@ -203,6 +201,26 @@ void gd_gl_area_scanout_texture(void *dg,
     gtk_gl_area_set_scanout_mode(vc, true);
     egl_fb_setup_for_tex(&vc->gfx.guest_fb, backing_width, backing_height,
                          backing_id, false);
+}
+
+void gd_gl_area_scanout_texture(void *dg,
+                                uint32_t backing_id,
+                                DisplayGLTextureBorrower backing_borrow,
+                                uint32_t x, uint32_t y,
+                                uint32_t w, uint32_t h)
+{
+    bool backing_y_0_top;
+    uint32_t backing_width;
+    uint32_t backing_height;
+
+    GLuint backing_texture = backing_borrow(backing_id, &backing_y_0_top,
+                                            &backing_width, &backing_height);
+    if (backing_texture) {
+        gd_gl_area_scanout_borrowed_texture(dg, backing_texture,
+                                            backing_y_0_top,
+                                            backing_width, backing_height,
+                                            x, y, w, h);
+    }
 }
 
 void gd_gl_area_scanout_disable(void *dg)
@@ -229,9 +247,9 @@ void gd_gl_area_scanout_dmabuf(void *dg, QemuDmaBuf *dmabuf)
         return;
     }
 
-    gd_gl_area_scanout_texture(dg, dmabuf->texture,
-                               false, dmabuf->width, dmabuf->height,
-                               0, 0, dmabuf->width, dmabuf->height);
+    gd_gl_area_scanout_borrowed_texture(dg, dmabuf->texture,
+                                        false, dmabuf->width, dmabuf->height,
+                                        0, 0, dmabuf->width, dmabuf->height);
 #endif
 }
 
