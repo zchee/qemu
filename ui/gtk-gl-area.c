@@ -139,10 +139,9 @@ void gd_gl_area_switch(DisplayChangeListener *dcl,
     }
 }
 
-QEMUGLContext gd_gl_area_create_context(DisplayChangeListener *dcl,
-                                        QEMUGLParams *params)
+QEMUGLContext gd_gl_area_create_context(void *dg, QEMUGLParams *params)
 {
-    VirtualConsole *vc = container_of(dcl, VirtualConsole, gfx.dcl);
+    VirtualConsole *vc = dg;
     GdkWindow *window;
     GdkGLContext *ctx;
     GError *err = NULL;
@@ -168,12 +167,17 @@ QEMUGLContext gd_gl_area_create_context(DisplayChangeListener *dcl,
     return ctx;
 }
 
-void gd_gl_area_destroy_context(DisplayChangeListener *dcl, QEMUGLContext ctx)
+void gd_gl_area_destroy_context(void *dg, QEMUGLContext ctx)
 {
     /* FIXME */
 }
 
-void gd_gl_area_scanout_texture(DisplayChangeListener *dcl,
+bool gd_gl_area_scanout_get_enabled(void *dg)
+{
+    return ((VirtualConsole *)dg)->gfx.scanout_mode;
+}
+
+void gd_gl_area_scanout_texture(void *dg,
                                 uint32_t backing_id,
                                 bool backing_y_0_top,
                                 uint32_t backing_width,
@@ -181,7 +185,7 @@ void gd_gl_area_scanout_texture(DisplayChangeListener *dcl,
                                 uint32_t x, uint32_t y,
                                 uint32_t w, uint32_t h)
 {
-    VirtualConsole *vc = container_of(dcl, VirtualConsole, gfx.dcl);
+    VirtualConsole *vc = dg;
 
     vc->gfx.x = x;
     vc->gfx.y = y;
@@ -201,11 +205,9 @@ void gd_gl_area_scanout_texture(DisplayChangeListener *dcl,
                          backing_id, false);
 }
 
-void gd_gl_area_scanout_disable(DisplayChangeListener *dcl)
+void gd_gl_area_scanout_disable(void *dg)
 {
-    VirtualConsole *vc = container_of(dcl, VirtualConsole, gfx.dcl);
-
-    gtk_gl_area_set_scanout_mode(vc, false);
+    gtk_gl_area_set_scanout_mode(dg, false);
 }
 
 void gd_gl_area_scanout_flush(DisplayChangeListener *dcl,
@@ -216,11 +218,10 @@ void gd_gl_area_scanout_flush(DisplayChangeListener *dcl,
     gtk_gl_area_queue_render(GTK_GL_AREA(vc->gfx.drawing_area));
 }
 
-void gd_gl_area_scanout_dmabuf(DisplayChangeListener *dcl,
-                               QemuDmaBuf *dmabuf)
+void gd_gl_area_scanout_dmabuf(void *dg, QemuDmaBuf *dmabuf)
 {
 #ifdef CONFIG_GBM
-    VirtualConsole *vc = container_of(dcl, VirtualConsole, gfx.dcl);
+    VirtualConsole *vc = dg;
 
     gtk_gl_area_make_current(GTK_GL_AREA(vc->gfx.drawing_area));
     egl_dmabuf_import_texture(dmabuf);
@@ -228,7 +229,7 @@ void gd_gl_area_scanout_dmabuf(DisplayChangeListener *dcl,
         return;
     }
 
-    gd_gl_area_scanout_texture(dcl, dmabuf->texture,
+    gd_gl_area_scanout_texture(dg, dmabuf->texture,
                                false, dmabuf->width, dmabuf->height,
                                0, 0, dmabuf->width, dmabuf->height);
 #endif
@@ -239,8 +240,7 @@ void gtk_gl_area_init(void)
     display_opengl = 1;
 }
 
-int gd_gl_area_make_current(DisplayChangeListener *dcl,
-                            QEMUGLContext ctx)
+int gd_gl_area_make_current(void *dg, QEMUGLContext ctx)
 {
     gdk_gl_context_make_current(ctx);
     return 0;

@@ -85,7 +85,7 @@ void sdl2_window_create(struct sdl2_console *scon)
     if (scon->hidden) {
         flags |= SDL_WINDOW_HIDDEN;
     }
-#ifdef CONFIG_OPENGL
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
     if (scon->opengl) {
         flags |= SDL_WINDOW_OPENGL;
     }
@@ -129,7 +129,7 @@ void sdl2_window_resize(struct sdl2_console *scon)
 static void sdl2_redraw(struct sdl2_console *scon)
 {
     if (scon->opengl) {
-#ifdef CONFIG_OPENGL
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
         sdl2_gl_redraw(scon);
 #endif
     } else {
@@ -768,7 +768,16 @@ static const DisplayChangeListenerOps dcl_2d_ops = {
     .dpy_cursor_define    = sdl_mouse_define,
 };
 
-#ifdef CONFIG_OPENGL
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
+static const DisplayGLOps dg_gl_ops = {
+    .dpy_gl_ctx_create          = sdl2_gl_create_context,
+    .dpy_gl_ctx_destroy         = sdl2_gl_destroy_context,
+    .dpy_gl_ctx_make_current    = sdl2_gl_make_context_current,
+    .dpy_gl_scanout_get_enabled = sdl2_gl_scanout_get_enabled,
+    .dpy_gl_scanout_disable     = sdl2_gl_scanout_disable,
+    .dpy_gl_scanout_texture     = sdl2_gl_scanout_texture,
+};
+
 static const DisplayChangeListenerOps dcl_gl_ops = {
     .dpy_name                = "sdl2-gl",
     .dpy_gfx_update          = sdl2_gl_update,
@@ -778,11 +787,6 @@ static const DisplayChangeListenerOps dcl_gl_ops = {
     .dpy_mouse_set           = sdl_mouse_warp,
     .dpy_cursor_define       = sdl_mouse_define,
 
-    .dpy_gl_ctx_create       = sdl2_gl_create_context,
-    .dpy_gl_ctx_destroy      = sdl2_gl_destroy_context,
-    .dpy_gl_ctx_make_current = sdl2_gl_make_context_current,
-    .dpy_gl_scanout_disable  = sdl2_gl_scanout_disable,
-    .dpy_gl_scanout_texture  = sdl2_gl_scanout_texture,
     .dpy_gl_update           = sdl2_gl_scanout_flush,
 };
 #endif
@@ -791,7 +795,7 @@ static void sdl2_display_early_init(DisplayOptions *o)
 {
     assert(o->type == DISPLAY_TYPE_SDL);
     if (o->has_gl && o->gl) {
-#ifdef CONFIG_OPENGL
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
         display_opengl = 1;
 #endif
     }
@@ -837,6 +841,12 @@ static void sdl2_display_init(DisplayState *ds, DisplayOptions *o)
 
     gui_fullscreen = o->has_full_screen && o->full_screen;
 
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
+    if (display_opengl) {
+        register_displayglops(&dg_gl_ops);
+    }
+#endif
+
     for (i = 0;; i++) {
         QemuConsole *con = qemu_console_lookup_by_index(i);
         if (!con) {
@@ -857,7 +867,7 @@ static void sdl2_display_init(DisplayState *ds, DisplayOptions *o)
         }
         sdl2_console[i].idx = i;
         sdl2_console[i].opts = o;
-#ifdef CONFIG_OPENGL
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
         sdl2_console[i].opengl = display_opengl;
         sdl2_console[i].dcl.ops = display_opengl ? &dcl_gl_ops : &dcl_2d_ops;
 #else
@@ -866,6 +876,7 @@ static void sdl2_display_init(DisplayState *ds, DisplayOptions *o)
 #endif
         sdl2_console[i].dcl.con = con;
         sdl2_console[i].kbd = qkbd_state_init(con);
+        console_set_displayglcontext(con, sdl2_console + i);
         register_displaychangelistener(&sdl2_console[i].dcl);
 
 #if defined(SDL_VIDEO_DRIVER_WINDOWS) || defined(SDL_VIDEO_DRIVER_X11)
@@ -922,6 +933,6 @@ static void register_sdl1(void)
 
 type_init(register_sdl1);
 
-#ifdef CONFIG_OPENGL
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
 module_dep("ui-opengl");
 #endif

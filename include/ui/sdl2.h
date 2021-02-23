@@ -11,7 +11,7 @@
 #endif
 
 #include "ui/kbd-state.h"
-#ifdef CONFIG_OPENGL
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
 # include "ui/egl-helpers.h"
 #endif
 
@@ -32,7 +32,7 @@ struct sdl2_console {
     int ignore_hotkeys;
     SDL_GLContext winctx;
     QKbdState *kbd;
-#ifdef CONFIG_OPENGL
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
     QemuGLShader *gls;
     egl_fb guest_fb;
     egl_fb win_fb;
@@ -65,14 +65,13 @@ void sdl2_gl_switch(DisplayChangeListener *dcl,
 void sdl2_gl_refresh(DisplayChangeListener *dcl);
 void sdl2_gl_redraw(struct sdl2_console *scon);
 
-QEMUGLContext sdl2_gl_create_context(DisplayChangeListener *dcl,
-                                     QEMUGLParams *params);
-void sdl2_gl_destroy_context(DisplayChangeListener *dcl, QEMUGLContext ctx);
-int sdl2_gl_make_context_current(DisplayChangeListener *dcl,
-                                 QEMUGLContext ctx);
+QEMUGLContext sdl2_gl_create_context(void *dg, QEMUGLParams *params);
+void sdl2_gl_destroy_context(void *dg, QEMUGLContext ctx);
+int sdl2_gl_make_context_current(void *dg, QEMUGLContext ctx);
 
-void sdl2_gl_scanout_disable(DisplayChangeListener *dcl);
-void sdl2_gl_scanout_texture(DisplayChangeListener *dcl,
+bool sdl2_gl_scanout_get_enabled(void *dg);
+void sdl2_gl_scanout_disable(void *dg);
+void sdl2_gl_scanout_texture(void *dg,
                              uint32_t backing_id,
                              bool backing_y_0_top,
                              uint32_t backing_width,

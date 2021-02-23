@@ -127,7 +127,7 @@ struct QemuConsole {
     DisplayState *ds;
     DisplaySurface *surface;
     int dcls;
-    DisplayChangeListener *gl;
+    void *dg;
     bool gl_block;
     int window_id;
 
@@ -184,6 +184,7 @@ struct DisplayState {
     QLIST_HEAD(, DisplayChangeListener) listeners;
 };
 
+static const DisplayGLOps *display_gl_ops;
 static DisplayState *display_state;
 static QemuConsole *active_console;
 static QTAILQ_HEAD(, QemuConsole) consoles =
@@ -1103,8 +1104,14 @@ void console_select(unsigned int index)
                 }
             }
             if (s->surface) {
-                dpy_gfx_update(s, 0, 0, surface_width(s->surface),
-                               surface_height(s->surface));
+                int width = surface_width(s->surface);
+                int height = surface_height(s->surface);
+                if (display_gl_ops &&
+                    display_gl_ops->dpy_gl_scanout_get_enabled(s->dg)) {
+                    dpy_gl_update(s, 0, 0, width, height);
+                } else {
+                    dpy_gfx_update(s, 0, 0, width, height);
+                }
             }
         }
         if (ds->have_text) {
@@ -1454,26 +1461,30 @@ void qemu_free_displaysurface(DisplaySurface *surface)
     g_free(surface);
 }
 
-bool console_has_gl(QemuConsole *con)
+bool console_has_gl(void)
 {
-    return con->gl != NULL;
+    return display_gl_ops != NULL;
 }
 
-static bool displaychangelistener_has_dmabuf(DisplayChangeListener *dcl)
+void console_set_displayglcontext(QemuConsole *con, void *dg)
 {
-    if (dcl->ops->dpy_has_dmabuf) {
-        return dcl->ops->dpy_has_dmabuf(dcl);
+    con->dg = dg;
+}
+
+static bool console_has_dmabuf(QemuConsole *con)
+{
+    if (display_gl_ops->dpy_has_dmabuf) {
+        return display_gl_ops->dpy_has_dmabuf(con->dg);
     }
 
-    if (dcl->ops->dpy_gl_scanout_dmabuf) {
+    if (display_gl_ops->dpy_gl_scanout_dmabuf) {
         return true;
     }
 
     return false;
 }
 
-static bool dpy_compatible_with(QemuConsole *con,
-                                DisplayChangeListener *dcl, Error **errp)
+static bool dpy_compatible_with(QemuConsole *con, Error **errp)
 {
     ERRP_GUARD();
     int flags;
@@ -1481,19 +1492,28 @@ static bool dpy_compatible_with(QemuConsole *con,
     flags = con->hw_ops->get_flags ? con->hw_ops->get_flags(con->hw) : 0;
 
     if (flags & GRAPHIC_FLAGS_GL &&
-        !console_has_gl(con)) {
+        !console_has_gl()) {
         error_setg(errp, "The console requires a GL context.");
         return false;
-
     }
 
     if (flags & GRAPHIC_FLAGS_DMABUF &&
-        !displaychangelistener_has_dmabuf(dcl)) {
+        !console_has_dmabuf(con)) {
         error_setg(errp, "The console requires display DMABUF support.");
         return false;
     }
 
     return true;
+}
+
+void register_displayglops(const DisplayGLOps *dg_ops)
+{
+    if (display_gl_ops) {
+        error_report("can't register two opengl operators");
+        exit(1);
+    }
+
+    display_gl_ops = dg_ops;
 }
 
 void register_displaychangelistener(DisplayChangeListener *dcl)
@@ -1506,20 +1526,18 @@ void register_displaychangelistener(DisplayChangeListener *dcl)
 
     assert(!dcl->ds);
 
-    if (dcl->ops->dpy_gl_ctx_create) {
-        /* display has opengl support */
-        assert(dcl->con);
-        if (dcl->con->gl) {
-            fprintf(stderr, "can't register two opengl displays (%s, %s)\n",
-                    dcl->ops->dpy_name, dcl->con->gl->ops->dpy_name);
+    if (dcl->con) {
+        if (!dpy_compatible_with(dcl->con, &err)) {
+            error_report_err(err);
             exit(1);
         }
-        dcl->con->gl = dcl;
-    }
-
-    if (dcl->con && !dpy_compatible_with(dcl->con, dcl, &err)) {
-        error_report_err(err);
-        exit(1);
+    } else {
+        QTAILQ_FOREACH(con, &consoles, next) {
+            if (!dpy_compatible_with(con, &err)) {
+                error_report_err(err);
+                exit(1);
+            }
+        }
     }
 
     trace_displaychangelistener_register(dcl, dcl->ops->dpy_name);
@@ -1836,26 +1854,26 @@ bool dpy_cursor_define_supported(QemuConsole *con)
 QEMUGLContext dpy_gl_ctx_create(QemuConsole *con,
                                 struct QEMUGLParams *qparams)
 {
-    assert(con->gl);
-    return con->gl->ops->dpy_gl_ctx_create(con->gl, qparams);
+    assert(display_gl_ops);
+    return display_gl_ops->dpy_gl_ctx_create(con->dg, qparams);
 }
 
 void dpy_gl_ctx_destroy(QemuConsole *con, QEMUGLContext ctx)
 {
-    assert(con->gl);
-    con->gl->ops->dpy_gl_ctx_destroy(con->gl, ctx);
+    assert(display_gl_ops);
+    display_gl_ops->dpy_gl_ctx_destroy(con->dg, ctx);
 }
 
 int dpy_gl_ctx_make_current(QemuConsole *con, QEMUGLContext ctx)
 {
-    assert(con->gl);
-    return con->gl->ops->dpy_gl_ctx_make_current(con->gl, ctx);
+    assert(display_gl_ops);
+    return display_gl_ops->dpy_gl_ctx_make_current(con->dg, ctx);
 }
 
 void dpy_gl_scanout_disable(QemuConsole *con)
 {
-    assert(con->gl);
-    con->gl->ops->dpy_gl_scanout_disable(con->gl);
+    assert(display_gl_ops);
+    display_gl_ops->dpy_gl_scanout_disable(con->dg);
 }
 
 void dpy_gl_scanout_texture(QemuConsole *con,
@@ -1866,56 +1884,64 @@ void dpy_gl_scanout_texture(QemuConsole *con,
                             uint32_t x, uint32_t y,
                             uint32_t width, uint32_t height)
 {
-    assert(con->gl);
-    con->gl->ops->dpy_gl_scanout_texture(con->gl, backing_id,
-                                         backing_y_0_top,
-                                         backing_width, backing_height,
-                                         x, y, width, height);
+    assert(display_gl_ops);
+    display_gl_ops->dpy_gl_scanout_texture(con->dg, backing_id,
+                                           backing_y_0_top,
+                                           backing_width, backing_height,
+                                           x, y, width, height);
 }
 
 void dpy_gl_scanout_dmabuf(QemuConsole *con,
                            QemuDmaBuf *dmabuf)
 {
-    assert(con->gl);
-    con->gl->ops->dpy_gl_scanout_dmabuf(con->gl, dmabuf);
+    assert(display_gl_ops);
+    display_gl_ops->dpy_gl_scanout_dmabuf(con->dg, dmabuf);
 }
 
 void dpy_gl_cursor_dmabuf(QemuConsole *con, QemuDmaBuf *dmabuf,
                           bool have_hot, uint32_t hot_x, uint32_t hot_y)
 {
-    assert(con->gl);
+    assert(display_gl_ops);
 
-    if (con->gl->ops->dpy_gl_cursor_dmabuf) {
-        con->gl->ops->dpy_gl_cursor_dmabuf(con->gl, dmabuf,
-                                           have_hot, hot_x, hot_y);
+    if (display_gl_ops->dpy_gl_cursor_dmabuf) {
+        display_gl_ops->dpy_gl_cursor_dmabuf(con->dg, dmabuf,
+                                             have_hot, hot_x, hot_y);
     }
 }
 
 void dpy_gl_cursor_position(QemuConsole *con,
                             uint32_t pos_x, uint32_t pos_y)
 {
-    assert(con->gl);
+    assert(display_gl_ops);
 
-    if (con->gl->ops->dpy_gl_cursor_position) {
-        con->gl->ops->dpy_gl_cursor_position(con->gl, pos_x, pos_y);
+    if (display_gl_ops->dpy_gl_cursor_position) {
+        display_gl_ops->dpy_gl_cursor_position(con->dg, pos_x, pos_y);
     }
 }
 
 void dpy_gl_release_dmabuf(QemuConsole *con,
                           QemuDmaBuf *dmabuf)
 {
-    assert(con->gl);
+    assert(display_gl_ops);
 
-    if (con->gl->ops->dpy_gl_release_dmabuf) {
-        con->gl->ops->dpy_gl_release_dmabuf(con->gl, dmabuf);
+    if (display_gl_ops->dpy_gl_release_dmabuf) {
+        display_gl_ops->dpy_gl_release_dmabuf(con->dg, dmabuf);
     }
 }
 
 void dpy_gl_update(QemuConsole *con,
                    uint32_t x, uint32_t y, uint32_t w, uint32_t h)
 {
-    assert(con->gl);
-    con->gl->ops->dpy_gl_update(con->gl, x, y, w, h);
+    DisplayChangeListener *dcl;
+
+    QLIST_FOREACH(dcl, &con->ds->listeners, next) {
+        if (con != (dcl->con ? dcl->con : active_console)) {
+            continue;
+        }
+        if (dcl->ops->dpy_gl_update) {
+        dcl->ops->dpy_gl_update(dcl, x, y, w, h);
+    }
+}
 }
 
 /***********************************************************/
@@ -2026,7 +2052,7 @@ void graphic_console_close(QemuConsole *con)
     object_property_set_link(OBJECT(con), "device", NULL, &error_abort);
     graphic_console_set_hwops(con, &unused_ops, NULL);
 
-    if (con->gl) {
+    if (display_gl_ops) {
         dpy_gl_scanout_disable(con);
     }
     surface = qemu_create_placeholder_surface(width, height, unplugged);

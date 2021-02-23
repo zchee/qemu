@@ -341,7 +341,7 @@ static void gd_update_full_redraw(VirtualConsole *vc)
     int ww, wh;
     ww = gdk_window_get_width(gtk_widget_get_window(area));
     wh = gdk_window_get_height(gtk_widget_get_window(area));
-#if defined(CONFIG_OPENGL)
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
     if (vc->gfx.gls && gtk_use_gl_area) {
         gtk_gl_area_queue_render(GTK_GL_AREA(vc->gfx.drawing_area));
         return;
@@ -560,11 +560,11 @@ static const DisplayChangeListenerOps dcl_ops = {
 };
 
 
-#if defined(CONFIG_OPENGL)
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
 
-static bool gd_has_dmabuf(DisplayChangeListener *dcl)
+static bool gd_has_dmabuf(void *dg)
 {
-    VirtualConsole *vc = container_of(dcl, VirtualConsole, gfx.dcl);
+    VirtualConsole *vc = dg;
 
     if (gtk_use_gl_area && !gtk_widget_get_realized(vc->gfx.drawing_area)) {
         /* FIXME: Assume it will work, actual check done after realize */
@@ -577,6 +577,17 @@ static bool gd_has_dmabuf(DisplayChangeListener *dcl)
 
 /** DisplayState Callbacks (opengl version) **/
 
+static const DisplayGLOps dg_gl_area_ops = {
+    .dpy_gl_ctx_create          = gd_gl_area_create_context,
+    .dpy_gl_ctx_destroy         = gd_gl_area_destroy_context,
+    .dpy_gl_ctx_make_current    = gd_gl_area_make_current,
+    .dpy_gl_scanout_get_enabled = gd_gl_area_scanout_get_enabled,
+    .dpy_gl_scanout_texture     = gd_gl_area_scanout_texture,
+    .dpy_gl_scanout_disable     = gd_gl_area_scanout_disable,
+    .dpy_gl_scanout_dmabuf      = gd_gl_area_scanout_dmabuf,
+    .dpy_has_dmabuf             = gd_has_dmabuf,
+};
+
 static const DisplayChangeListenerOps dcl_gl_area_ops = {
     .dpy_name             = "gtk-egl",
     .dpy_gfx_update       = gd_gl_area_update,
@@ -586,14 +597,7 @@ static const DisplayChangeListenerOps dcl_gl_area_ops = {
     .dpy_mouse_set        = gd_mouse_set,
     .dpy_cursor_define    = gd_cursor_define,
 
-    .dpy_gl_ctx_create       = gd_gl_area_create_context,
-    .dpy_gl_ctx_destroy      = gd_gl_area_destroy_context,
-    .dpy_gl_ctx_make_current = gd_gl_area_make_current,
-    .dpy_gl_scanout_texture  = gd_gl_area_scanout_texture,
-    .dpy_gl_scanout_disable  = gd_gl_area_scanout_disable,
-    .dpy_gl_update           = gd_gl_area_scanout_flush,
-    .dpy_gl_scanout_dmabuf   = gd_gl_area_scanout_dmabuf,
-    .dpy_has_dmabuf          = gd_has_dmabuf,
+    .dpy_gl_update        = gd_gl_area_scanout_flush,
 };
 
 #ifdef CONFIG_X11
@@ -607,6 +611,10 @@ static const DisplayChangeListenerOps dcl_egl_ops = {
     .dpy_mouse_set        = gd_mouse_set,
     .dpy_cursor_define    = gd_cursor_define,
 
+    .dpy_gl_update        = gd_egl_scanout_flush,
+};
+
+static const DisplayGLOps dg_egl_ops = {
     .dpy_gl_ctx_create       = gd_egl_create_context,
     .dpy_gl_ctx_destroy      = qemu_egl_destroy_context,
     .dpy_gl_ctx_make_current = gd_egl_make_current,
@@ -616,13 +624,12 @@ static const DisplayChangeListenerOps dcl_egl_ops = {
     .dpy_gl_cursor_dmabuf    = gd_egl_cursor_dmabuf,
     .dpy_gl_cursor_position  = gd_egl_cursor_position,
     .dpy_gl_release_dmabuf   = gd_egl_release_dmabuf,
-    .dpy_gl_update           = gd_egl_scanout_flush,
     .dpy_has_dmabuf          = gd_has_dmabuf,
 };
 
 #endif
 
-#endif /* CONFIG_OPENGL */
+#endif /* defined(CONFIG_OPENGL) && defined(CONFIG_EGL) */
 
 /** QEMU Events **/
 
@@ -688,7 +695,7 @@ static void gd_set_ui_size(VirtualConsole *vc, gint width, gint height)
     dpy_set_ui_info(vc->gfx.dcl.con, &info);
 }
 
-#if defined(CONFIG_OPENGL)
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
 
 static gboolean gd_render_event(GtkGLArea *area, GdkGLContext *context,
                                 void *opaque)
@@ -742,7 +749,7 @@ static gboolean gd_draw_event(GtkWidget *widget, cairo_t *cr, void *opaque)
     int ww, wh;
     int fbw, fbh;
 
-#if defined(CONFIG_OPENGL)
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
     if (vc->gfx.gls) {
         if (gtk_use_gl_area) {
             /* invoke render callback please */
@@ -1850,7 +1857,7 @@ static void gd_connect_vc_gfx_signals(VirtualConsole *vc)
 {
     g_signal_connect(vc->gfx.drawing_area, "draw",
                      G_CALLBACK(gd_draw_event), vc);
-#if defined(CONFIG_OPENGL)
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
     if (gtk_use_gl_area) {
         /* wire up GtkGlArea events */
         g_signal_connect(vc->gfx.drawing_area, "render",
@@ -1964,7 +1971,7 @@ static GtkWidget *gd_create_menu_machine(GtkDisplayState *s)
     return machine_menu;
 }
 
-#if defined(CONFIG_OPENGL)
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
 static void gl_area_realize(GtkGLArea *area, VirtualConsole *vc)
 {
     gtk_gl_area_make_current(area);
@@ -1987,7 +1994,7 @@ static GSList *gd_vc_gfx_init(GtkDisplayState *s, VirtualConsole *vc,
     vc->gfx.scale_x = 1.0;
     vc->gfx.scale_y = 1.0;
 
-#if defined(CONFIG_OPENGL)
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
     if (display_opengl) {
         if (gtk_use_gl_area) {
             vc->gfx.drawing_area = gtk_gl_area_new();
@@ -2042,6 +2049,7 @@ static GSList *gd_vc_gfx_init(GtkDisplayState *s, VirtualConsole *vc,
     vc->gfx.kbd = qkbd_state_init(con);
     vc->gfx.dcl.con = con;
 
+    console_set_displayglcontext(con, vc);
     register_displaychangelistener(&vc->gfx.dcl);
 
     gd_connect_vc_gfx_signals(vc);
@@ -2130,6 +2138,18 @@ static GtkWidget *gd_create_menu_view(GtkDisplayState *s)
 
     separator = gtk_separator_menu_item_new();
     gtk_menu_shell_append(GTK_MENU_SHELL(view_menu), separator);
+
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
+    if (display_opengl) {
+        if (gtk_use_gl_area) {
+            register_displayglops(&dg_gl_area_ops);
+        } else {
+#ifdef CONFIG_X11
+            register_displayglops(&dg_egl_ops);
+#endif
+        }
+    }
+#endif
 
     /* gfx */
     for (vc = 0;; vc++) {
@@ -2315,7 +2335,7 @@ static void early_gtk_display_init(DisplayOptions *opts)
 
     assert(opts->type == DISPLAY_TYPE_GTK);
     if (opts->has_gl && opts->gl != DISPLAYGL_MODE_OFF) {
-#if defined(CONFIG_OPENGL)
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
 #if defined(GDK_WINDOWING_WAYLAND)
         if (GDK_IS_WAYLAND_DISPLAY(gdk_display_get_default())) {
             gtk_use_gl_area = true;
@@ -2351,6 +2371,6 @@ static void register_gtk(void)
 
 type_init(register_gtk);
 
-#ifdef CONFIG_OPENGL
+#if defined(CONFIG_OPENGL) && defined(CONFIG_EGL)
 module_dep("ui-opengl");
 #endif

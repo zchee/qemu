@@ -4,10 +4,8 @@
 #include "ui/console.h"
 #include "ui/egl-helpers.h"
 
-QEMUGLContext qemu_egl_create_context(DisplayChangeListener *dcl,
-                                      QEMUGLParams *params);
-void qemu_egl_destroy_context(DisplayChangeListener *dcl, QEMUGLContext ctx);
-int qemu_egl_make_context_current(DisplayChangeListener *dcl,
-                                  QEMUGLContext ctx);
+QEMUGLContext qemu_egl_create_context(void *dg, QEMUGLParams *params);
+void qemu_egl_destroy_context(void *dg, QEMUGLContext ctx);
+int qemu_egl_make_context_current(void *dg, QEMUGLContext ctx);
 
 #endif /* EGL_CONTEXT_H */

@@ -1,8 +1,7 @@
 #include "qemu/osdep.h"
 #include "ui/egl-context.h"
 
-QEMUGLContext qemu_egl_create_context(DisplayChangeListener *dcl,
-                                      QEMUGLParams *params)
+QEMUGLContext qemu_egl_create_context(void *dg, QEMUGLParams *params)
 {
    EGLContext ctx;
    EGLint ctx_att_core[] = {
@@ -24,13 +23,12 @@ QEMUGLContext qemu_egl_create_context(DisplayChangeListener *dcl,
    return ctx;
 }
 
-void qemu_egl_destroy_context(DisplayChangeListener *dcl, QEMUGLContext ctx)
+void qemu_egl_destroy_context(void *dg, QEMUGLContext ctx)
 {
     eglDestroyContext(qemu_egl_display, ctx);
 }
 
-int qemu_egl_make_context_current(DisplayChangeListener *dcl,
-                                  QEMUGLContext ctx)
+int qemu_egl_make_context_current(void *dg, QEMUGLContext ctx)
 {
    return eglMakeCurrent(qemu_egl_display,
                          EGL_NO_SURFACE, EGL_NO_SURFACE, ctx);

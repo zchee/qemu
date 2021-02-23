@@ -909,17 +909,17 @@ static void spice_gl_switch(DisplayChangeListener *dcl,
     }
 }
 
-static QEMUGLContext qemu_spice_gl_create_context(DisplayChangeListener *dcl,
+static QEMUGLContext qemu_spice_gl_create_context(void *dg,
                                                   QEMUGLParams *params)
 {
     eglMakeCurrent(qemu_egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE,
                    qemu_egl_rn_ctx);
-    return qemu_egl_create_context(dcl, params);
+    return qemu_egl_create_context(dg, params);
 }
 
-static void qemu_spice_gl_scanout_disable(DisplayChangeListener *dcl)
+static void qemu_spice_gl_scanout_disable(void *dg)
 {
-    SimpleSpiceDisplay *ssd = container_of(dcl, SimpleSpiceDisplay, dcl);
+    SimpleSpiceDisplay *ssd = dg;
 
     trace_qemu_spice_gl_scanout_disable(ssd->qxl.id);
     spice_qxl_gl_scanout(&ssd->qxl, -1, 0, 0, 0, 0, false);
@@ -928,7 +928,7 @@ static void qemu_spice_gl_scanout_disable(DisplayChangeListener *dcl)
     ssd->have_scanout = false;
 }
 
-static void qemu_spice_gl_scanout_texture(DisplayChangeListener *dcl,
+static void qemu_spice_gl_scanout_texture(void *dg,
                                           uint32_t tex_id,
                                           bool y_0_top,
                                           uint32_t backing_width,
@@ -936,7 +936,7 @@ static void qemu_spice_gl_scanout_texture(DisplayChangeListener *dcl,
                                           uint32_t x, uint32_t y,
                                           uint32_t w, uint32_t h)
 {
-    SimpleSpiceDisplay *ssd = container_of(dcl, SimpleSpiceDisplay, dcl);
+    SimpleSpiceDisplay *ssd = dg;
     EGLint stride = 0, fourcc = 0;
     int fd = -1;
 
@@ -956,10 +956,9 @@ static void qemu_spice_gl_scanout_texture(DisplayChangeListener *dcl,
     ssd->have_scanout = true;
 }
 
-static void qemu_spice_gl_scanout_dmabuf(DisplayChangeListener *dcl,
-                                         QemuDmaBuf *dmabuf)
+static void qemu_spice_gl_scanout_dmabuf(void *dg, QemuDmaBuf *dmabuf)
 {
-    SimpleSpiceDisplay *ssd = container_of(dcl, SimpleSpiceDisplay, dcl);
+    SimpleSpiceDisplay *ssd = dg;
 
     ssd->guest_dmabuf = dmabuf;
     ssd->guest_dmabuf_refresh = true;
@@ -968,11 +967,11 @@ static void qemu_spice_gl_scanout_dmabuf(DisplayChangeListener *dcl,
     ssd->have_scanout = true;
 }
 
-static void qemu_spice_gl_cursor_dmabuf(DisplayChangeListener *dcl,
+static void qemu_spice_gl_cursor_dmabuf(void *dg,
                                         QemuDmaBuf *dmabuf, bool have_hot,
                                         uint32_t hot_x, uint32_t hot_y)
 {
-    SimpleSpiceDisplay *ssd = container_of(dcl, SimpleSpiceDisplay, dcl);
+    SimpleSpiceDisplay *ssd = dg;
 
     ssd->have_hot = have_hot;
     ssd->hot_x = hot_x;
@@ -991,10 +990,10 @@ static void qemu_spice_gl_cursor_dmabuf(DisplayChangeListener *dcl,
     }
 }
 
-static void qemu_spice_gl_cursor_position(DisplayChangeListener *dcl,
+static void qemu_spice_gl_cursor_position(void *dg,
                                           uint32_t pos_x, uint32_t pos_y)
 {
-    SimpleSpiceDisplay *ssd = container_of(dcl, SimpleSpiceDisplay, dcl);
+    SimpleSpiceDisplay *ssd = dg;
 
     qemu_mutex_lock(&ssd->lock);
     ssd->ptr_x = pos_x;
@@ -1002,10 +1001,9 @@ static void qemu_spice_gl_cursor_position(DisplayChangeListener *dcl,
     qemu_mutex_unlock(&ssd->lock);
 }
 
-static void qemu_spice_gl_release_dmabuf(DisplayChangeListener *dcl,
-                                         QemuDmaBuf *dmabuf)
+static void qemu_spice_gl_release_dmabuf(void *dg, QemuDmaBuf *dmabuf)
 {
-    SimpleSpiceDisplay *ssd = container_of(dcl, SimpleSpiceDisplay, dcl);
+    SimpleSpiceDisplay *ssd = dg;
 
     if (ssd->guest_dmabuf == dmabuf) {
         ssd->guest_dmabuf = NULL;
@@ -1105,7 +1103,10 @@ static const DisplayChangeListenerOps display_listener_gl_ops = {
     .dpy_refresh             = spice_gl_refresh,
     .dpy_mouse_set           = display_mouse_set,
     .dpy_cursor_define       = display_mouse_define,
+    .dpy_gl_update           = qemu_spice_gl_update,
+};
 
+static const DisplayGLOps display_gl_ops = {
     .dpy_gl_ctx_create       = qemu_spice_gl_create_context,
     .dpy_gl_ctx_destroy      = qemu_egl_destroy_context,
     .dpy_gl_ctx_make_current = qemu_egl_make_context_current,
@@ -1116,7 +1117,6 @@ static const DisplayChangeListenerOps display_listener_gl_ops = {
     .dpy_gl_cursor_dmabuf    = qemu_spice_gl_cursor_dmabuf,
     .dpy_gl_cursor_position  = qemu_spice_gl_cursor_position,
     .dpy_gl_release_dmabuf   = qemu_spice_gl_release_dmabuf,
-    .dpy_gl_update           = qemu_spice_gl_update,
 };
 
 #endif /* HAVE_SPICE_GL */
@@ -1137,6 +1137,8 @@ static void qemu_spice_display_init_one(QemuConsole *con)
         ssd->gls = qemu_gl_init_shader();
         ssd->have_surface = false;
         ssd->have_scanout = false;
+        console_set_displayglcontext(con, ssd);
+        register_displayglops(&display_gl_ops);
     }
 #endif
     ssd->dcl.con = con;
