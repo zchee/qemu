@@ -536,7 +536,7 @@ static void do_hvf_cpu_synchronize_post_reset(CPUState *cpu,
     cpu->vcpu_dirty = false;
 }
 
-void hvf_cpu_synchronize_post_reset(CPUState *cpu)
+static void hvf_cpu_synchronize_post_reset(CPUState *cpu)
 {
     run_on_cpu(cpu, do_hvf_cpu_synchronize_post_reset, RUN_ON_CPU_NULL);
 }
@@ -548,7 +548,7 @@ static void do_hvf_cpu_synchronize_post_init(CPUState *cpu,
     cpu->vcpu_dirty = false;
 }
 
-void hvf_cpu_synchronize_post_init(CPUState *cpu)
+static void hvf_cpu_synchronize_post_init(CPUState *cpu)
 {
     run_on_cpu(cpu, do_hvf_cpu_synchronize_post_init, RUN_ON_CPU_NULL);
 }
@@ -559,7 +559,7 @@ static void do_hvf_cpu_synchronize_pre_loadvm(CPUState *cpu,
     cpu->vcpu_dirty = true;
 }
 
-void hvf_cpu_synchronize_pre_loadvm(CPUState *cpu)
+static void hvf_cpu_synchronize_pre_loadvm(CPUState *cpu)
 {
     run_on_cpu(cpu, do_hvf_cpu_synchronize_pre_loadvm, RUN_ON_CPU_NULL);
 }
