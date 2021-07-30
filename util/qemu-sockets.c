@@ -18,7 +18,12 @@
 #include "qemu/osdep.h"
 
 #ifdef CONFIG_AF_VSOCK
+#ifdef CONFIG_DARWIN
+#include <sys/ioctl.h>
+#include <sys/vsock.h>
+#else
 #include <linux/vm_sockets.h>
+#endif /* CONFIG_DARWIN */
 #endif /* CONFIG_AF_VSOCK */
 
 #include "qemu-common.h"

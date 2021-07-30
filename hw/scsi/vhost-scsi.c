@@ -15,7 +15,13 @@
  */
 
 #include "qemu/osdep.h"
+#ifdef CONFIG_LINUX
 #include <linux/vhost.h>
+#endif
+#ifdef __APPLE__
+#include <sys/ioctl.h>
+#include <sys/vsock.h>
+#endif
 #include <sys/ioctl.h>
 #include "qapi/error.h"
 #include "qemu/error-report.h"

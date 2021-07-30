@@ -132,6 +132,11 @@ if targetos == 'linux'
                         '-isystem', 'linux-headers',
                         language: ['c', 'cpp'])
 endif
+if targetos == 'darwin'
+  add_project_arguments('-isystem', meson.current_source_dir() / 'linux-headers',
+                        '-isystem', 'linux-headers',
+                        language: ['c', 'cpp'])
+endif
 
 add_project_arguments('-iquote', '.',
                       '-iquote', meson.current_source_dir(),

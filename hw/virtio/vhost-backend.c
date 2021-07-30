@@ -17,8 +17,14 @@
 
 #include "hw/virtio/vhost-vdpa.h"
 #ifdef CONFIG_VHOST_KERNEL
+#ifdef CONFIG_LINUX
 #include <linux/vhost.h>
 #include <sys/ioctl.h>
+#endif
+#ifdef CONFIG_DARWIN
+#include <sys/vhost.h>
+#include <sys/ioctl.h>
+#endif
 
 static int vhost_kernel_call(struct vhost_dev *dev, unsigned long int request,
                              void *arg)

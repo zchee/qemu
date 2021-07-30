@@ -2445,7 +2445,9 @@ fi
 
 # vhost backends
 if test "$vhost_user" = "yes" && test "$linux" != "yes"; then
-  error_exit "vhost-user is only available on Linux"
+  if test "$darwin" != "yes"; then
+    error_exit "vhost-user is only available on Linux"
+  fi
 fi
 test "$vhost_vdpa" = "" && vhost_vdpa=$linux
 if test "$vhost_vdpa" = "yes" && test "$linux" != "yes"; then
@@ -2453,7 +2455,9 @@ if test "$vhost_vdpa" = "yes" && test "$linux" != "yes"; then
 fi
 test "$vhost_kernel" = "" && vhost_kernel=$linux
 if test "$vhost_kernel" = "yes" && test "$linux" != "yes"; then
-  error_exit "vhost-kernel is only available on Linux"
+  if test "$darwin" != "yes"; then
+    error_exit "vhost-kernel is only available on Linux"
+  fi
 fi
 
 # vhost-kernel devices
@@ -2463,7 +2467,9 @@ if test "$vhost_scsi" = "yes" && test "$vhost_kernel" != "yes"; then
 fi
 test "$vhost_vsock" = "" && vhost_vsock=$vhost_kernel
 if test "$vhost_vsock" = "yes" && test "$vhost_kernel" != "yes"; then
-  error_exit "--enable-vhost-vsock requires --enable-vhost-kernel"
+  if test "$darwin" != "yes"; then
+    error_exit "--enable-vhost-vsock requires --enable-vhost-kernel"
+  fi
 fi
 
 # vhost-user backends
@@ -4103,10 +4109,16 @@ cat > $TMPC << EOF
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#ifdef __APPLE__
+#include <sys/ioctl.h>
+#include <sys/vsock.h>
+#endif
 #if !defined(AF_VSOCK)
 # error missing AF_VSOCK flag
 #endif
+#ifdef __linux__
 #include <linux/vm_sockets.h>
+#endif
 int main(void) {
     int sock, ret;
     struct sockaddr_vm svm;
